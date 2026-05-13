@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>챙김이</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-emerald-50 min-h-screen">
+
+<!-- =========================
+   역할 선택
+========================= -->
+<div id="role-select-page" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white w-full max-w-md rounded-3xl shadow-xl p-8 text-center">
+    <h1 class="text-4xl font-bold text-emerald-600 mb-6">챙김이 ✨</h1>
+
+    <button onclick="goStudentLogin()" class="w-full bg-emerald-500 text-white py-4 rounded-2xl mb-3 font-bold">
+      👦 학생
+    </button>
+
+    <button onclick="goTeacherLogin()" class="w-full border-2 border-emerald-500 text-emerald-600 py-4 rounded-2xl font-bold">
+      👩‍🏫 교사
+    </button>
+  </div>
+</div>
+
+<!-- =========================
+   학생 로그인
+========================= -->
+<div id="student-login-page" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white w-full max-w-md rounded-3xl shadow-xl p-8">
+    <button onclick="goRoleSelect()" class="text-gray-500 mb-6">← 돌아가기</button>
+
+    <h2 class="text-2xl font-bold text-center text-emerald-600 mb-5">학생 로그인</h2>
+
+    <input id="student-name" class="w-full border rounded-2xl px-4 py-3 mb-5" placeholder="이름 입력">
+
+    <button onclick="loginStudent()" class="w-full bg-emerald-500 text-white py-3 rounded-2xl font-bold">
+      시작
+    </button>
+  </div>
+</div>
+
+<!-- =========================
+   교사 로그인
+========================= -->
+<div id="teacher-login-page" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white w-full max-w-md rounded-3xl shadow-xl p-8">
+    <button onclick="goRoleSelect()" class="text-gray-500 mb-6">← 돌아가기</button>
+
+    <h2 class="text-2xl font-bold text-center text-emerald-600 mb-5">교사 로그인</h2>
+
+    <input id="teacher-password" type="password" class="w-full border rounded-2xl px-4 py-3 mb-5" placeholder="비밀번호">
+
+    <button onclick="loginTeacher()" class="w-full bg-emerald-500 text-white py-3 rounded-2xl font-bold">
+      로그인
+    </button>
+  </div>
+</div>
+
+<!-- =========================
+   학생 화면
+========================= -->
+<div id="student-page" class="hidden min-h-screen p-4">
+  <div class="max-w-md mx-auto">
+
+    <div class="flex justify-between mb-6">
+      <h1 id="welcome-text" class="text-xl font-bold text-emerald-600"></h1>
+      <button onclick="logout()" class="bg-gray-200 px-3 py-2 rounded-xl">로그아웃</button>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow p-5 mb-4">
+      <h2 class="font-bold mb-2">📊 수행률</h2>
+      <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+        <div id="week-bar" class="bg-emerald-500 h-3 rounded-full" style="width:0%"></div>
+      </div>
+      <p id="week-text" class="text-sm text-gray-600"></p>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow p-5">
+      <h2 class="font-bold mb-4">🎒 준비물</h2>
+      <div id="quest-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- =========================
+   교사 화면
+========================= -->
+<div id="teacher-page" class="hidden min-h-screen p-4">
+  <div class="max-w-md mx-auto">
+
+    <div class="flex justify-between mb-6">
+      <h1 class="text-xl font-bold text-emerald-600">👩‍🏫 교사</h1>
+      <button onclick="logout()" class="bg-gray-200 px-3 py-2 rounded-xl">로그아웃</button>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow p-5 mb-4">
+      <h2 class="font-bold mb-3">과제 추가</h2>
+
+      <input id="quest-input" class="w-full border rounded-2xl px-4 py-3 mb-2" placeholder="준비물">
+      <input id="quest-date" type="date" class="w-full border rounded-2xl px-4 py-3 mb-3">
+
+      <div id="student-list" class="mb-3"></div>
+
+      <button onclick="addQuest()" class="w-full bg-emerald-500 text-white py-3 rounded-2xl font-bold">
+        추가
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+
+/* =========================
+   상태
+========================= */
+const KEY = "quests";
+let currentStudent = "";
+let model = null;
+
+/* =========================
+   페이지 이동
+========================= */
+function hideAll() {
+  ["role-select-page","student-login-page","teacher-login-page","student-page","teacher-page"]
+  .forEach(id => document.getElementById(id).classList.add("hidden"));
+}
+
+function goStudentLogin(){ hideAll(); document.getElementById("student-login-page").classList.remove("hidden"); }
+function goTeacherLogin(){ hideAll(); document.getElementById("teacher-login-page").classList.remove("hidden"); }
+function goRoleSelect(){ hideAll(); document.getElementById("role-select-page").classList.remove("hidden"); }
+
+/* =========================
+   저장
+========================= */
+function load(){ return JSON.parse(localStorage.getItem(KEY)) || []; }
+function save(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
+
+/* =========================
+   로그인
+========================= */
+function loginStudent(){
+  const n = document.getElementById("student-name").value.trim();
+  if(!n) return alert("이름");
+
+  currentStudent = n;
+
+  let students = JSON.parse(localStorage.getItem("students")) || [];
+  if(!students.includes(n)) {
+    students.push(n);
+    localStorage.setItem("students", JSON.stringify(students));
+  }
+
+  hideAll();
+  document.getElementById("student-page").classList.remove("hidden");
+  document.getElementById("welcome-text").innerText = n + "님";
+
+  renderStudent();
+}
+
+function loginTeacher(){
+  const pw = document.getElementById("teacher-password").value;
+  if(pw !== "1234") return alert("비번");
+
+  hideAll();
+  document.getElementById("teacher-page").classList.remove("hidden");
+  renderTeacher();
+}
+
+/* =========================
+   과제 추가
+========================= */
+function addQuest(){
+  const item = document.getElementById("quest-input").value;
+  const date = document.getElementById("quest-date").value;
+  const students = JSON.parse(localStorage.getItem("students")) || [];
+
+  if(!item || !date) return alert("입력");
+
+  let data = load();
+
+  students.forEach(s=>{
+    data.push({
+      id: crypto.randomUUID(),
+      item,
+      date,
+      student:s,
+      completed:false
+    });
+  });
+
+  save(data);
+  alert("추가됨");
+}
+
+/* =========================
+   AI 모델
+========================= */
+async function loadAI(){
+  if(model) return model;
+
+  await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs");
+  await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd");
+
+  model = await cocoSsd.load();
+  return model;
+}
+
+/* =========================
+   🔥 AI 인증 (핵심 수정)
+========================= */
+async function runAI(id,file){
+  show();
+
+  try{
+    const img = await toImg(file);
+    const m = await loadAI();
+
+    const res = await m.detect(img);
+
+    console.log(res);
+
+    hide();
+
+    const allowed = ["book","cell phone","backpack","laptop","mouse","keyboard","bottle","remote"];
+
+    const ok = res.some(p => p.score > 0.25 && allowed.includes(p.class));
+
+    if(ok){
+      done(id);
+    } else {
+      alert("인식 실패");
+    }
+
+  }catch(e){
+    hide();
+    alert("AI 오류");
+  }
+}
+
+/* =========================
+   학생 UI
+========================= */
+function renderStudent(){
+  const list = load().filter(q=>q.student===currentStudent);
+
+  const box = document.getElementById("quest-list");
+  box.innerHTML = "";
+
+  list.forEach(q=>{
+    const d = document.createElement("div");
+    d.className="p-3 bg-emerald-50 rounded-xl mb-2";
+
+    d.innerHTML = `<b>${q.item}</b><br>${q.date}`;
+
+    if(!q.completed){
+      const b = document.createElement("button");
+      b.innerText="AI 인증";
+      b.className="bg-emerald-500 text-white px-3 py-1 rounded-xl mt-2";
+      b.onclick=()=>cam(q.id);
+      d.appendChild(b);
+    }else d.innerHTML+="<br>✅";
+
+    box.appendChild(d);
+  });
+
+  renderRate();
+}
+
+/* =========================
+   카메라
+========================= */
+function cam(id){
+  const i=document.createElement("input");
+  i.type="file";
+  i.accept="image/*";
+  i.capture="environment";
+
+  i.onchange=e=>{
+    const f=e.target.files[0];
+    if(f)runAI(id,f);
+  };
+
+  i.click();
+}
+
+/* =========================
+   수행률
+========================= */
+function renderRate(){
+  const q=load().filter(x=>x.student===currentStudent);
+
+  const t=q.length;
+  const d=q.filter(x=>x.completed).length;
+
+  const p=t?Math.round(d/t*100):0;
+
+  document.getElementById("week-bar").style.width=p+"%";
+  document.getElementById("week-text").innerText=
+    t?`${d}/${t} (${p}%)`:"과제 없음";
+}
+
+/* =========================
+   완료
+========================= */
+function done(id){
+  let d=load();
+
+  d=d.map(x=>{
+    if(x.id===id)x.completed=true;
+    return x;
+  });
+
+  save(d);
+  renderStudent();
+  renderRate();
+}
+
+/* =========================
+   teacher
+========================= */
+function renderTeacher(){
+  const students = JSON.parse(localStorage.getItem("students")) || [];
+  document.getElementById("student-list").innerHTML =
+    students.map(s=>`<label><input type="checkbox" checked disabled> ${s}</label>`).join("");
+}
+
+/* =========================
+   utils
+========================= */
+function toImg(file){
+  return new Promise(r=>{
+    const i=new Image();
+    i.onload=()=>r(i);
+    i.src=URL.createObjectURL(file);
+  });
+}
+
+function loadScript(src){
+  return new Promise(r=>{
+    const s=document.createElement("script");
+    s.src=src;
+    s.onload=r;
+    document.body.appendChild(s);
+  });
+}
+
+function show(){
+  if(document.getElementById("l"))return;
+  const d=document.createElement("div");
+  d.id="l";
+  d.className="fixed inset-0 bg-black/50 flex items-center justify-center text-white";
+  d.innerText="AI 분석중...";
+  document.body.appendChild(d);
+}
+
+function hide(){
+  document.getElementById("l")?.remove();
+}
+
+/* =========================
+   logout
+========================= */
+function logout(){
+  currentStudent="";
+  goRoleSelect();
+}
+
+/* =========================
+   start
+========================= */
+window.onload=goRoleSelect;
+
+</script>
+
+</body>
+</html>
