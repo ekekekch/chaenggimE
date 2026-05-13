@@ -15,19 +15,22 @@
 
         <!-- 퀘스트 발송 섹션 -->
         <section class="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
+            <h2 class="font-black text-xl text-blue-600">🚀 퀘스트 부여</h2>
             <div class="grid grid-cols-1 gap-4">
-                <input type="text" id="item-name" placeholder="미션 이름 (예: 수학 익힘책)" class="p-4 bg-slate-50 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500">
+                <input type="text" id="item-name" placeholder="미션 이름 (예: 일기장 가져오기)" class="p-4 bg-slate-50 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500">
                 <input type="datetime-local" id="deadline" class="p-4 bg-slate-50 rounded-2xl outline-none font-bold">
             </div>
             
             <div class="space-y-3">
                 <div class="flex justify-between items-center">
-                    <span class="text-xs font-black text-slate-400 uppercase">대상 학생 선택</span>
+                    <span class="text-xs font-black text-slate-400 uppercase">대상 학생 선택 (입장한 학생만 표시됨)</span>
                     <button onclick="toggleAll()" class="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">전체 선택/해제</button>
                 </div>
-                <div id="student-selector" class="flex flex-wrap gap-2"></div>
+                <div id="student-selector" class="flex flex-wrap gap-2">
+                    <p class="text-[10px] text-slate-300 font-bold py-2">현재 접속 중인 학생이 없습니다.</p>
+                </div>
             </div>
-            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-black text-lg shadow-xl shadow-blue-100 active:scale-95 transition-all">퀘스트 발송</button>
+            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all">퀘스트 발송</button>
         </section>
 
         <!-- 현황 요약 -->
@@ -40,12 +43,11 @@
                 </div>
             </div>
             <div class="bg-white p-6 rounded-[32px] border">
-                <h3 class="text-xs font-black text-slate-400 mb-4">우리반 학생들이</h3>
+                <h3 class="text-xs font-black text-slate-400 mb-4">우리반 학생들</h3>
                 <div id="presence-list" class="flex flex-wrap gap-2"></div>
             </div>
         </div>
 
-        <!-- 부여한 퀘스트 상세 현황 -->
         <section class="space-y-4">
             <h2 class="font-black text-xl px-2">부여한 퀘스트 현황</h2>
             <div id="quest-dashboard" class="space-y-4"></div>
@@ -57,23 +59,17 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        const MASTER_LIST = ["김철수", "이영희", "박지민", "최유나", "정재현", "송미소"];
+        let currentOnlineStudents = [];
         let selected = [];
         let chart;
 
         window.onload = () => {
-            // 학생 선택 버튼 생성
-            document.getElementById('student-selector').innerHTML = MASTER_LIST.map(s => 
-                `<button id="btn-${s}" onclick="toggleStudent('${s}')" class="px-4 py-2 rounded-xl border-2 border-slate-100 text-[10px] font-black text-slate-400 transition-all">${s}</button>`
-            ).join('');
-
             const ctx = document.getElementById('mainChart').getContext('2d');
             chart = new Chart(ctx, {
                 type: 'doughnut',
                 data: { datasets: [{ data: [0, 100], backgroundColor: ['#2563eb', '#f1f5f9'], borderWidth: 0 }] },
                 options: { cutout: '80%', events: [] }
             });
-
             initRealtime();
         };
 
@@ -90,69 +86,81 @@
         }
 
         function toggleAll() {
-            if(selected.length === MASTER_LIST.length) {
+            if(selected.length === currentOnlineStudents.length && currentOnlineStudents.length > 0) {
                 selected = [];
-                MASTER_LIST.forEach(s => document.getElementById(`btn-${s}`).className = "px-4 py-2 rounded-xl border-2 border-slate-100 text-[10px] font-black text-slate-400");
             } else {
-                selected = [...MASTER_LIST];
-                MASTER_LIST.forEach(s => document.getElementById(`btn-${s}`).className = "px-4 py-2 rounded-xl border-2 border-blue-500 bg-blue-50 text-blue-600 font-black");
+                selected = [...currentOnlineStudents];
             }
+            updateSelectorButtons();
+        }
+
+        function updateSelectorButtons() {
+            const container = document.getElementById('student-selector');
+            if(currentOnlineStudents.length === 0) {
+                container.innerHTML = '<p class="text-[10px] text-slate-300 font-bold py-2">현재 접속 중인 학생이 없습니다.</p>';
+                return;
+            }
+            container.innerHTML = currentOnlineStudents.map(s => {
+                const isSel = selected.includes(s);
+                return `<button id="btn-${s}" onclick="toggleStudent('${s}')" class="px-4 py-2 rounded-xl border-2 ${isSel ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'} text-[10px] font-black transition-all">${s}</button>`;
+            }).join('');
         }
 
         function sendQuest() {
             const name = document.getElementById('item-name').value;
             const dl = document.getElementById('deadline').value;
-            if(!name || !dl || selected.length === 0) return alert("항목을 모두 채워주세요.");
+            if(!name || !dl || selected.length === 0) return alert("내용, 마감일, 대상을 확인하세요.");
 
             db.ref('quests').push({
                 item_name: name,
                 deadline: dl.replace('T', ' '),
-                target: selected.length === MASTER_LIST.length ? 'all' : 'selected',
+                target: 'selected',
                 target_list: selected,
                 verified_students: {}
             }).then(() => {
-                alert("발송 완료!");
+                alert("퀘스트 발송 성공!");
                 document.getElementById('item-name').value = '';
+                selected = [];
+                updateSelectorButtons();
             });
         }
 
         function initRealtime() {
-            // 우리반 학생들이 (입장 현황)
+            // 접속자 기반으로 버튼 동적 생성
             db.ref('presence').on('value', snap => {
                 const data = snap.val() || {};
-                const list = Object.keys(data);
-                document.getElementById('presence-list').innerHTML = list.map(n => 
+                currentOnlineStudents = Object.keys(data);
+                
+                // 선택된 학생 중 나간 학생 제거
+                selected = selected.filter(s => currentOnlineStudents.includes(s));
+                
+                updateSelectorButtons();
+                
+                document.getElementById('presence-list').innerHTML = currentOnlineStudents.map(n => 
                     `<span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-bold border border-blue-100">● ${n}</span>`
                 ).join('') || '<p class="text-[10px] text-slate-300">접속 중인 학생 없음</p>';
             });
 
-            // 부여한 퀘스트 현황 업데이트
             db.ref('quests').on('value', snap => {
                 const quests = snap.val() || {};
                 const keys = Object.keys(quests).reverse();
-                const container = document.getElementById('quest-dashboard');
-                
                 let tDone = 0, tTotal = 0;
 
-                container.innerHTML = keys.map(id => {
+                document.getElementById('quest-dashboard').innerHTML = keys.map(id => {
                     const q = quests[id];
-                    const targetList = q.target === 'all' ? MASTER_LIST : q.target_list;
-                    const doneList = Object.keys(q.verified_students || {});
-                    
-                    tDone += doneList.length;
-                    tTotal += targetList.length;
+                    const targets = q.target_list || [];
+                    const dones = Object.keys(q.verified_students || {});
+                    tDone += dones.length;
+                    tTotal += targets.length;
 
                     return `
                     <div class="bg-white p-6 rounded-[32px] border shadow-sm">
                         <div class="flex justify-between items-center mb-4">
                             <h4 class="font-black text-lg">${q.item_name}</h4>
-                            <span class="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">${doneList.length}/${targetList.length}</span>
+                            <span class="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">${dones.length}/${targets.length}</span>
                         </div>
                         <div class="flex flex-wrap gap-2">
-                            ${targetList.map(s => {
-                                const isDone = doneList.includes(s);
-                                return `<div class="px-3 py-1.5 rounded-xl text-[10px] font-bold border ${isDone ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-300 border-slate-100'}">${s}</div>`;
-                            }).join('')}
+                            ${targets.map(s => `<div class="px-3 py-1.5 rounded-xl text-[10px] font-bold border ${dones.includes(s) ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-300 border-slate-100'}">${s}</div>`).join('')}
                         </div>
                     </div>`;
                 }).join('');
