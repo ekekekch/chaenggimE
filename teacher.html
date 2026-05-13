@@ -7,68 +7,50 @@
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-slate-50 p-6 font-sans">
+<body class="bg-slate-50 p-6">
     <div class="max-w-2xl mx-auto space-y-6 pb-24">
-        <header><h1 class="text-3xl font-black italic text-blue-600">Quest Master</h1></header>
+        <header><h1 class="text-3xl font-black text-blue-600 italic">Quest Controller</h1></header>
 
-        <section class="bg-white p-8 rounded-[40px] border shadow-sm space-y-6 text-sm">
-            <h2 class="font-black text-xl text-blue-600 mb-4">🚀 새 퀘스트 만들기</h2>
+        <!-- 신규 발송 -->
+        <section class="bg-white p-8 rounded-[32px] border shadow-sm space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-bold">
-                <input type="text" id="item-name" placeholder="무엇을 챙겨야 하나요?" class="p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-blue-500">
-                <input type="datetime-local" id="deadline" class="p-4 bg-slate-50 rounded-2xl outline-none">
+                <input type="text" id="item-name" placeholder="무엇을 가져와야 하나요?" class="p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 ring-blue-500">
+                <input type="datetime-local" id="deadline" class="p-4 bg-slate-50 rounded-2xl border-none outline-none">
             </div>
             
             <div class="space-y-3">
                 <div class="flex justify-between items-center px-1">
-                    <span class="text-xs font-black text-slate-400">대상 학생 선택 (전체 12명)</span>
+                    <span class="text-xs font-black text-slate-400">대상 학생 선택</span>
                     <button onclick="toggleAll()" class="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">전체 선택</button>
                 </div>
                 <div id="student-selector" class="flex flex-wrap gap-2"></div>
             </div>
-            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all">퀘스트 발송하기</button>
+            
+            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">퀘스트 발송</button>
         </section>
 
-        <section class="bg-white p-6 rounded-[32px] border">
-            <h3 class="text-xs font-black text-slate-400 mb-4 uppercase">우리반 학생들 현황</h3>
-            <div id="presence-list" class="flex flex-wrap gap-2"></div>
-            <div class="mt-6 flex items-center justify-center">
-                <div class="relative w-40 h-40">
-                    <canvas id="mainChart"></canvas>
-                    <div id="chart-label" class="absolute inset-0 flex items-center justify-center font-black text-blue-600 text-2xl">0%</div>
-                </div>
-            </div>
-        </section>
-
+        <!-- 실시간 대시보드 -->
         <section class="space-y-4">
-            <h2 class="font-black text-xl px-2">진행 중인 퀘스트 리포트</h2>
-            <div id="quest-dashboard" class="space-y-4 text-sm font-bold"></div>
+            <h2 class="font-black text-xl px-2">진행 중인 퀘스트 현황</h2>
+            <div id="quest-dashboard" class="space-y-4 font-bold"></div>
         </section>
     </div>
 
     <script>
+        // ⚠️ 주의: 아래 주소를 선생님의 Firebase Realtime Database 주소로 반드시 바꾸세요!
         const firebaseConfig = { databaseURL: "https://chaenggime-default-rtdb.firebaseio.com/" };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 요청하신 무작위 12명 명단 (김큐티 포함)
         const MASTER_LIST = ["김큐티", "이하늘", "박구름", "최바다", "정햇살", "강바람", "윤숲", "조별", "한달", "신샘", "임산", "오내일"];
         let selected = [];
-        let chart;
 
         window.onload = () => {
             const container = document.getElementById('student-selector');
             container.innerHTML = MASTER_LIST.map(s => 
                 `<button id="btn-${s}" onclick="toggleStudent('${s}')" class="px-4 py-2 rounded-xl border-2 border-slate-100 text-[10px] font-black text-slate-400 transition-all">${s}</button>`
             ).join('');
-
-            const ctx = document.getElementById('mainChart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'doughnut',
-                data: { datasets: [{ data: [0, 100], backgroundColor: ['#2563eb', '#f1f5f9'], borderWidth: 0 }] },
-                options: { cutout: '80%', events: [] }
-            });
             initRealtime();
         };
 
@@ -97,47 +79,47 @@
         function sendQuest() {
             const name = document.getElementById('item-name').value;
             const dl = document.getElementById('deadline').value;
-            if(!name || !dl || selected.length === 0) return alert("빈칸을 채워주세요!");
+            if(!name || !dl || selected.length === 0) return alert("항목을 모두 채워주세요.");
 
             db.ref('quests').push({
                 item_name: name,
                 deadline: dl.replace('T', ' '),
                 target_list: selected,
                 verified_students: {}
-            }).then(() => {
-                alert("발송 성공!");
+            })
+            .then(() => {
+                alert("✅ 퀘스트가 발송되었습니다!");
                 document.getElementById('item-name').value = '';
-            });
+            })
+            .catch(err => alert("❌ 발송 실패: " + err.message));
         }
 
         function initRealtime() {
             db.ref('quests').on('value', snap => {
-                const quests = snap.val() || {};
-                const keys = Object.keys(quests).reverse();
-                let tDone = 0, tTotal = 0;
-
-                document.getElementById('quest-dashboard').innerHTML = keys.map(id => {
-                    const q = quests[id];
+                const data = snap.val() || {};
+                const keys = Object.keys(data).reverse();
+                const container = document.getElementById('quest-dashboard');
+                
+                container.innerHTML = keys.map(id => {
+                    const q = data[id];
                     const targets = q.target_list || [];
                     const dones = Object.keys(q.verified_students || {});
-                    tDone += dones.length; tTotal += targets.length;
 
                     return `
                     <div class="bg-white p-6 rounded-[32px] border shadow-sm">
-                        <div class="flex justify-between items-center mb-4 font-black">
-                            <h4 class="text-lg">${q.item_name}</h4>
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-black text-lg">${q.item_name}</h4>
                             <span class="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs">${dones.length}/${targets.length}</span>
                         </div>
-                        <div class="flex flex-wrap gap-2 font-bold">
-                            ${targets.map(s => `<div class="px-3 py-1.5 rounded-xl text-[10px] border ${dones.includes(s) ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-300 border-slate-100'}">${s}</div>`).join('')}
+                        <div class="flex flex-wrap gap-2">
+                            ${targets.map(s => `
+                                <div class="px-3 py-1.5 rounded-xl text-[10px] border ${dones.includes(s) ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-300 border-slate-100'}">
+                                    ${s}
+                                </div>
+                            `).join('')}
                         </div>
                     </div>`;
-                }).join('');
-
-                const percent = tTotal > 0 ? Math.round((tDone / tTotal) * 100) : 0;
-                document.getElementById('chart-label').innerText = percent + "%";
-                chart.data.datasets[0].data = [percent, 100 - percent];
-                chart.update();
+                }).join('') || '<p class="text-center py-10 text-slate-300">부여한 퀘스트가 없습니다.</p>';
             });
         }
     </script>
