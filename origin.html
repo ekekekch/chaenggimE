@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ko" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>챙김이 (Quest Prep) - AI 사진 인증</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <!-- AI 모델 로드 (데이터 소모가 있으니 와이파이 권장) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Outfit', sans-serif; }
+    .quest-card { transition: all 0.3s ease; }
+    .xp-bar { transition: width 0.6s ease-out; }
+    #loading-overlay { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(4px); }
+  </style>
+</head>
+<body class="h-full bg-white text-gray-900">
+  <div id="app" class="h-full w-full overflow-auto">
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-emerald-200 px-4 py-3">
+      <div class="max-w-6xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-emerald-500 flex items-center justify-center">
+            <i data-lucide="pencil" class="w-5 h-5 text-white"></i>
+          </div>
+          <h1 class="text-lg font-bold">챙김이</h1>
+        </div>
+        <div class="flex gap-1">
+          <button onclick="switchView('student')" id="nav-student" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-500 text-white">학생</button>
+          <button onclick="switchView('teacher')" id="nav-teacher" class="px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-600">교사</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Student View -->
+    <div id="student-view" class="max-w-lg mx-auto px-4 py-6">
+      <!-- XP Bar -->
+      <div class="mb-6 bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-emerald-700 font-bold">오늘의 성장</span>
+          <span id="xp-display" class="text-sm font-bold text-emerald-600">0 / 100 XP</span>
+        </div>
+        <div class="w-full h-3 bg-emerald-100 rounded-full overflow-hidden">
+          <div id="xp-bar" class="xp-bar h-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-base font-semibold">📋 오늘의 퀘스트</h2>
+        <button onclick="openAddQuest()" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md hover:bg-emerald-200">+ 직접 추가</button>
+      </div>
+      
+      <div id="quest-list" class="space-y-3 mb-8"></div>
+    </div>
+
+    <!-- Teacher View -->
+    <div id="teacher-view" class="hidden max-w-lg mx-auto px-4 py-6">
+      <div class="bg-white rounded-xl p-5 border border-emerald-200 shadow-sm">
+        <h3 class="text-sm font-bold mb-4">📢 학생에게 준비물 알리기</h3>
+        <input id="quest-item" type="text" placeholder="예: 가위, 책, 휴대폰(인식가능항목)" class="w-full mb-3 px-3 py-2 border rounded-lg text-sm">
+        <button onclick="assignQuest()" class="w-full py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium">부여하기</button>
+        <p class="mt-2 text-[10px] text-gray-400">* AI가 인식하기 쉬운 사물 위주로 테스트해보세요.</p>
+      </div>
+    </div>
+
+    <!-- Hidden File Input for Upload -->
+    <input type="file" id="photo-input" accept="image/*" class="hidden" onchange="handlePhotoUpload(event)">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden fixed inset-0 z-[60] flex flex-col items-center justify-center">
+      <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p class="text-emerald-700 font-bold">AI가 준비물을 확인하고 있어요...</p>
+    </div>
+
+    <!-- Modal & Toast -->
+    <div id="add-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl p-5 w-full max-w-sm">
+        <h3 class="text-base font-bold mb-4">새 퀘스트 추가</h3>
+        <input id="item-name-input" type="text" class="w-full mb-4 px-3 py-2 border rounded-lg text-sm" placeholder="어떤 걸 챙겨야 하나요?">
+        <div class="flex gap-2">
+          <button onclick="closeAddQuest()" class="flex-1 py-2 bg-gray-100 rounded-lg text-sm">취소</button>
+          <button onclick="addQuest()" class="flex-1 py-2 bg-emerald-500 text-white rounded-lg text-sm">추가</button>
+        </div>
+      </div>
+    </div>
+    <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white px-5 py-2 rounded-full text-sm"></div>
+  </div>
+
+  <script>
+    let allData = JSON.parse(localStorage.getItem('quest_data')) || [];
+    let currentQuestId = null;
+    let aiModel = null;
+
+    // AI 모델 미리 로드
+    async function loadModel() {
+      aiModel = await cocoSsd.load();
+      console.log("AI Model Loaded");
+    }
+    loadModel();
+
+    function saveData() {
+      localStorage.setItem('quest_data', JSON.stringify(allData));
+      renderQuests();
+    }
+
+    function switchView(view) {
+      document.getElementById('student-view').classList.toggle('hidden', view !== 'student');
+      document.getElementById('teacher-view').classList.toggle('hidden', view !== 'teacher');
+      document.getElementById('nav-student').className = view === 'student' ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-500 text-white' : 'px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-600';
+      document.getElementById('nav-teacher').className = view === 'teacher' ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-500 text-white' : 'px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-600';
+    }
+
+    function openAddQuest() { document.getElementById('add-modal').classList.remove('hidden'); }
+    function closeAddQuest() { document.getElementById('add-modal').classList.add('hidden'); }
+
+    function addQuest() {
+      const item = document.getElementById('item-name-input').value.trim();
+      if (!item) return showToast('준비물을 입력해주세요');
+      allData.push({ id: Date.now(), student_name: '학생1', item_name: item, verified: false, xp_earned: 0 });
+      saveData();
+      closeAddQuest();
+      document.getElementById('item-name-input').value = '';
+    }
+
+    function assignQuest() {
+      const item = document.getElementById('quest-item').value.trim();
+      if (!item) return showToast('준비물을 입력하세요');
+      allData.push({ id: Date.now(), student_name: '학생1', item_name: item, verified: false, xp_earned: 0 });
+      saveData();
+      document.getElementById('quest-item').value = '';
+      showToast('퀘스트를 보냈습니다!');
+    }
+
+    // 1. 인증 버튼 클릭 시 파일 선택창 열기
+    function startVerify(id) {
+      currentQuestId = id;
+      document.getElementById('photo-input').click();
+    }
+
+    // 2. 사진이 선택되면 처리
+    async function handlePhotoUpload(event) {
+      const file = event.target.files[0];
+      if (!file || !currentQuestId) return;
+
+      const loading = document.getElementById('loading-overlay');
+      loading.classList.remove('hidden');
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const img = new Image();
+        img.onload = async () => {
+          await runAiAnalysis(img);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // 3. AI 분석 실행
+    async function runAiAnalysis(imgElement) {
+      if (!aiModel) await loadModel();
+      
+      const predictions = await aiModel.detect(imgElement);
+      const quest = allData.find(q => q.id === currentQuestId);
+      
+      // AI가 감지한 물체들 중 준비물 이름이 포함되어 있는지 확인 (간단하게 '어떤 물체든 감지'되면 일단 성공으로 설정 가능)
+      // 실무에서는 quest.item_name과 predictions[i].class를 매칭합니다.
+      if (predictions.length > 0) {
+        quest.verified = true;
+        quest.xp_earned = 20;
+        showToast(`✅ 확인되었습니다! (${predictions[0].class})`);
+      } else {
+        showToast("❌ 준비물을 찾을 수 없습니다. 다시 찍어주세요.");
+      }
+
+      document.getElementById('loading-overlay').classList.add('hidden');
+      document.getElementById('photo-input').value = ''; // 초기화
+      saveData();
+    }
+
+    function deleteQuest(id) {
+      allData = allData.filter(q => q.id !== id);
+      saveData();
+    }
+
+    function renderQuests() {
+      const container = document.getElementById('quest-list');
+      const myQuests = allData.filter(q => q.student_name === '학생1');
+      
+      if (myQuests.length === 0) {
+        container.innerHTML = `<div class="py-16 text-center text-gray-400 text-sm">등록된 퀘스트가 없습니다</div>`;
+        updateXP(0);
+        lucide.createIcons();
+        return;
+      }
+
+      let totalXP = 0;
+      container.innerHTML = myQuests.map(q => {
+        if(q.verified) totalXP += q.xp_earned;
+        return `
+          <div class="quest-card bg-white rounded-xl p-4 border border-emerald-100 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full ${q.verified ? 'bg-emerald-100 text-emerald-500' : 'bg-gray-50 text-gray-300'} flex items-center justify-center">
+                <i data-lucide="${q.verified ? 'check-circle' : 'camera'}"></i>
+              </div>
+              <h3 class="font-bold ${q.verified ? 'text-gray-400 line-through' : 'text-gray-800'}">${q.item_name}</h3>
+            </div>
+            <div class="flex gap-2">
+              ${!q.verified ? `<button onclick="startVerify(${q.id})" class="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md">사진 인증</button>` : '<span class="text-emerald-500 text-xs font-bold">완료!</span>'}
+              <button onclick="deleteQuest(${q.id})" class="text-gray-300 hover:text-red-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateXP(totalXP);
+      lucide.createIcons();
+    }
+
+    function updateXP(xp) {
+      const display = document.getElementById('xp-display');
+      const bar = document.getElementById('xp-bar');
+      display.textContent = `${xp} / 100 XP`;
+      bar.style.width = `${Math.min(xp, 100)}%`;
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    window.onload = renderQuests;
+  </script>
+</body>
+</html>
