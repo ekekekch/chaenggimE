@@ -5,49 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>챙김이 - 학생용</title>
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
-<body class="bg-slate-50 text-gray-900 font-sans">
-    <div id="login-modal" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6">
-        <div class="w-full max-w-sm space-y-4">
-            <div class="w-20 h-20 bg-emerald-500 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black shadow-xl">챙</div>
-            <h1 class="text-2xl font-black text-center mb-2">우리 반 챙김이</h1>
-            <input type="password" id="access-code" placeholder="인증 코드 (1234)" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all font-bold text-center">
-            <input type="text" id="user-name" placeholder="이름 입력 (예: 김큐티)" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all font-bold text-center">
-            <button onclick="login()" class="w-full bg-emerald-500 text-white p-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">입장하기</button>
+<body class="bg-slate-50">
+    <div id="login-modal" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-sm space-y-4 text-center">
+            <div class="w-20 h-20 bg-emerald-500 rounded-3xl mx-auto mb-4 flex items-center justify-center text-white text-4xl font-black">챙</div>
+            <h1 class="text-2xl font-black mb-6">우리 반 챙김이</h1>
+            <input type="text" id="user-name" placeholder="이름 입력 (예: 김큐티)" class="w-full p-4 border-2 rounded-2xl focus:border-emerald-500 outline-none font-bold text-center">
+            <button onclick="login()" class="w-full bg-emerald-500 text-white p-4 rounded-2xl font-black text-lg">입장하기</button>
         </div>
     </div>
 
-    <div id="app" class="max-w-lg mx-auto pb-24 hidden">
-        <nav class="sticky top-0 bg-white/80 backdrop-blur-md border-b px-6 py-5 flex justify-between items-center z-50">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white"><i data-lucide="sparkles" class="w-4"></i></div>
-                <h1 class="font-black text-lg" id="display-name"></h1>
-            </div>
-            <button onclick="localStorage.clear(); location.reload();" class="text-[10px] font-bold text-slate-400 border px-3 py-1 rounded-full">로그아웃</button>
-        </nav>
+    <div id="app" class="max-w-lg mx-auto p-5 hidden">
+        <header class="py-6 flex justify-between items-center">
+            <h1 class="font-black text-xl text-emerald-600" id="display-name"></h1>
+            <button onclick="localStorage.clear(); location.reload();" class="text-xs text-slate-400 border px-2 py-1 rounded">로그아웃</button>
+        </header>
 
-        <div class="px-5 py-6 space-y-8">
-            <section class="space-y-4">
-                <h2 class="font-black text-lg flex items-center gap-2"><i data-lucide="target" class="text-emerald-500"></i> 오늘의 퀘스트</h2>
-                <div id="quest-list" class="space-y-3"></div>
-            </section>
-
-            <section class="bg-slate-900 p-6 rounded-[32px] text-white shadow-xl">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="font-black text-sm opacity-60">주간 달성률</h2>
-                    <span id="weekly-rate" class="text-emerald-400 font-black text-2xl">0%</span>
-                </div>
-                <div class="grid grid-cols-7 gap-2" id="weekly-grid"></div>
-            </section>
+        <div class="space-y-4">
+            <h2 class="font-black text-lg">오늘의 퀘스트</h2>
+            <div id="quest-list" class="space-y-3"></div>
         </div>
     </div>
 
-    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleAuth(event)">
+    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
 
     <script>
+        // ⚠️ 주의: 아래 주소를 선생님의 Firebase Realtime Database 주소로 반드시 바꾸세요!
         const firebaseConfig = { databaseURL: "https://chaenggime-default-rtdb.firebaseio.com/" };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
@@ -58,9 +44,7 @@
         window.onload = () => { if(myName) startApp(); };
 
         function login() {
-            const code = document.getElementById('access-code').value;
             const name = document.getElementById('user-name').value.trim();
-            if(code !== "1234") return alert("코드가 틀렸습니다.");
             if(!name) return alert("이름을 입력하세요.");
             localStorage.setItem("studentName", name);
             myName = name;
@@ -70,51 +54,42 @@
         function startApp() {
             document.getElementById('login-modal').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
-            document.getElementById('display-name').innerText = myName + " 학생";
-            syncData();
-        }
-
-        function syncData() {
+            document.getElementById('display-name').innerText = "👋 " + myName;
+            
+            // 퀘스트 실시간 감시
             db.ref('quests').on('value', snap => {
-                const quests = snap.val() || {};
-                const myQuests = Object.keys(quests).reverse().filter(id => quests[id].target === 'all' || (quests[id].target_list && quests[id].target_list.includes(myName)));
+                const data = snap.val() || {};
+                const list = document.getElementById('quest-list');
+                const myItems = Object.keys(data).filter(id => data[id].target_list && data[id].target_list.includes(myName));
 
-                document.getElementById('quest-list').innerHTML = myQuests.map(id => {
-                    const q = quests[id];
+                list.innerHTML = myItems.reverse().map(id => {
+                    const q = data[id];
                     const isDone = q.verified_students && q.verified_students[myName];
                     return `
                     <div class="bg-white p-5 rounded-2xl border flex justify-between items-center shadow-sm">
-                        <p class="font-black ${isDone ? 'text-slate-300 line-through' : 'text-slate-800'}">${q.item_name}</p>
-                        ${isDone ? '<span class="text-emerald-500 font-black text-xs text-right">인증완료</span>' : 
-                        `<button onclick="activeId='${id}'; document.getElementById('camera-input').click()" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black">인증</button>`}
+                        <div>
+                            <p class="font-black ${isDone ? 'text-slate-300 line-through' : 'text-slate-800'}">${q.item_name}</p>
+                            <p class="text-[10px] text-slate-400 font-bold">마감: ${q.deadline}</p>
+                        </div>
+                        ${isDone ? '<span class="text-emerald-500 font-black text-xs">완료됨 ✅</span>' : 
+                        `<button onclick="upload('${id}')" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black">인증하기</button>`}
                     </div>`;
-                }).join('') || '<p class="text-center py-10 text-slate-400 font-bold text-sm">진행 중인 퀘스트가 없습니다.</p>';
-                
-                updateWeekly(myQuests, quests);
-                lucide.createIcons();
+                }).join('') || '<p class="text-center py-10 text-slate-400 font-bold">도착한 퀘스트가 없습니다.</p>';
             });
         }
 
-        function updateWeekly(myQuests, all) {
-            const grid = document.getElementById('weekly-grid');
-            grid.innerHTML = '';
-            let count = 0;
-            for(let i=6; i>=0; i--) {
-                const day = new Date(); day.setDate(day.getDate()-i);
-                const isDone = myQuests.some(id => all[id].verified_students && all[id].verified_students[myName]);
-                if(isDone) count++;
-                grid.innerHTML += `<div class="aspect-square rounded-xl bg-slate-800 border-2 ${isDone ? 'bg-emerald-500 border-emerald-400' : 'border-slate-700'}"></div>`;
-            }
-            document.getElementById('weekly-rate').innerText = myQuests.len
-            gth > 0 ? Math.round((count/myQuests.length)*100)+"%" : "0%";
+        function upload(id) {
+            activeId = id;
+            document.getElementById('camera-input').click();
         }
 
-        function handleAuth(e) {
+        document.getElementById('camera-input').onchange = (e) => {
             if(!e.target.files[0]) return;
             const time = new Date().toLocaleString();
-            db.ref(`quests/${activeId}/verified_students/${myName}`).set(time);
-            alert("미션 인증 성공!");
-        }
+            db.ref(`quests/${activeId}/verified_students/${myName}`).set(time)
+              .then(() => alert("인증이 완료되었습니다!"))
+              .catch(err => alert("에러 발생: " + err.message));
+        };
     </script>
 </body>
 </html>
