@@ -8,144 +8,116 @@
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <style>
-        .xp-bar { transition: width 0.8s ease-out; }
-        #loading-overlay { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); }
-    </style>
 </head>
 <body class="bg-slate-50 text-gray-900">
-    <!-- 로그인 모달 -->
-    <div id="login-modal" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6">
+    <!-- 로그인 섹션 (세션 정보 없으면 표시) -->
+    <div id="login-modal" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 hidden">
         <div class="w-full max-w-sm space-y-4">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-emerald-500 rounded-2xl mx-auto mb-4 flex items-center justify-center text-white text-3xl font-black">챙</div>
-                <h1 class="text-2xl font-black">우리 반 챙김이 로그인</h1>
-            </div>
-            <input type="text" id="access-code" placeholder="인증 코드 입력" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none">
-            <input type="text" id="user-name" placeholder="이름을 입력하세요" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none">
-            <button onclick="login()" class="w-full bg-emerald-500 text-white p-4 rounded-2xl font-black text-lg shadow-lg shadow-emerald-100">입장하기</button>
+            <h1 class="text-2xl font-black text-center mb-6">우리 반 챙김이</h1>
+            <input type="text" id="access-code" placeholder="인증 코드(1234)" class="w-full p-4 border rounded-2xl outline-none focus:ring-2 ring-emerald-500">
+            <input type="text" id="user-name" placeholder="본인 이름" class="w-full p-4 border rounded-2xl outline-none focus:ring-2 ring-emerald-500">
+            <button onclick="login()" class="w-full bg-emerald-500 text-white p-4 rounded-2xl font-black text-lg">입장하기</button>
         </div>
     </div>
 
-    <div id="app" class="max-w-lg mx-auto pb-20 hidden text-sm sm:text-base">
-        <nav class="sticky top-0 bg-white/80 backdrop-blur-md border-b px-6 py-5 z-40 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white"><i data-lucide="sparkles" class="w-5"></i></div>
-                <h1 class="font-black text-lg"><span id="display-name" class="text-emerald-600"></span> 학생</h1>
-            </div>
-            <div class="text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-500" id="streak-count">0일 연속 달성 🔥</div>
+    <!-- 메인 앱 섹션 -->
+    <div id="app" class="max-w-lg mx-auto pb-20 hidden">
+        <nav class="sticky top-0 bg-white border-b px-6 py-5 flex justify-between items-center z-50">
+            <h1 class="font-black text-lg"><span id="display-name" class="text-emerald-600"></span> 학생</h1>
+            <button onclick="logout()" class="text-[10px] text-slate-400 font-bold">로그아웃</button>
         </nav>
 
         <div class="px-5 py-6 space-y-8">
-            <!-- 오늘의 성장 섹션 -->
             <section>
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-emerald-50">
-                    <div class="flex items-center justify-between mb-3 text-sm font-bold">
-                        <span>오늘의 성장</span>
-                        <span id="xp-text" class="text-emerald-500">0 / 100 XP</span>
-                    </div>
-                    <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-2">
-                        <div id="xp-bar" class="xp-bar h-full bg-emerald-500" style="width: 0%"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- 오늘의 미션 -->
-            <section>
-                <h2 class="font-black text-lg mb-4 flex items-center gap-2 px-1"><i data-lucide="target" class="text-emerald-500"></i> 오늘의 미션</h2>
+                <h2 class="font-black text-lg mb-4 flex items-center gap-2 px-1"><i data-lucide="target" class="text-emerald-500 w-5"></i> 오늘의 미션</h2>
                 <div id="quest-list" class="space-y-3">
                     <div class="text-center py-10 text-slate-400 font-bold">미션을 불러오는 중...</div>
                 </div>
             </section>
-
-            <!-- 이번 주 현황 -->
-            <section>
-                <h2 class="font-black text-lg mb-4 flex items-center gap-2 px-1"><i data-lucide="calendar" class="text-blue-500"></i> 이번 주 기록</h2>
-                <div class="grid grid-cols-7 gap-2">
-                    <!-- 월~일 간단 현황 -->
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400">월</div><div class="w-full aspect-square rounded-lg bg-slate-100 border"></div></div>
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400">화</div><div class="w-full aspect-square rounded-lg bg-emerald-100 border-emerald-300"></div></div>
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400">수</div><div class="w-full aspect-square rounded-lg bg-slate-100 border"></div></div>
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400">목</div><div class="w-full aspect-square rounded-lg bg-slate-100 border"></div></div>
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400">금</div><div class="w-full aspect-square rounded-lg bg-slate-100 border"></div></div>
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400 text-blue-400">토</div><div class="w-full aspect-square rounded-lg bg-slate-100 border"></div></div>
-                    <div class="text-center space-y-1"><div class="text-[10px] font-bold text-slate-400 text-red-400">일</div><div class="w-full aspect-square rounded-lg bg-slate-100 border"></div></div>
-                </div>
-            </section>
         </div>
     </div>
 
-    <!-- 카메라 강제 입력 (capture="environment") -->
-    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="processVerification(event)">
-    
-    <div id="loading-overlay" class="hidden fixed inset-0 z-[200] flex flex-col items-center justify-center">
-        <div class="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="font-black text-emerald-800">현장 사진 검증 중...</p>
-    </div>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="verifyPhoto(event)">
 
     <script>
+        // Firebase 설정 (교사용과 반드시 동일해야 함)
         const firebaseConfig = { databaseURL: "https://chaenggime-default-rtdb.firebaseio.com/" };
-        firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        let myName = "";
+        let myName = sessionStorage.getItem("studentName");
         let currentQuestId = "";
+
+        // 페이지 로드 시 로그인 상태 확인
+        window.onload = () => {
+            if (myName) {
+                showApp();
+            } else {
+                document.getElementById('login-modal').classList.remove('hidden');
+            }
+        };
 
         function login() {
             const code = document.getElementById('access-code').value;
-            myName = document.getElementById('user-name').value;
-            if(code !== "1234") return alert("인증 코드가 틀렸습니다!"); // 임시 코드
-            if(!myName) return alert("이름을 입력하세요!");
+            const nameInput = document.getElementById('user-name').value.trim();
+            
+            if (code !== "1234") return alert("코드가 틀렸습니다.");
+            if (!nameInput) return alert("이름을 입력하세요.");
 
-            document.getElementById('display-name').innerText = myName;
-            document.getElementById('login-modal').classList.add('hidden');
-            document.getElementById('app').classList.remove('hidden');
-            startSync();
+            sessionStorage.setItem("studentName", nameInput); // 새로고침해도 유지되게 저장
+            myName = nameInput;
+            
+            // 실시간 입장 현황 기록
+            db.ref('presence/' + myName).set({ status: "online", last_seen: Date.now() });
+            
+            showApp();
         }
 
-        function startSync() {
+        function showApp() {
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            document.getElementById('display-name').innerText = myName;
+            loadQuests();
+        }
+
+        function loadQuests() {
             db.ref('quests').on('value', (snap) => {
                 const quests = snap.val() || {};
                 const list = document.getElementById('quest-list');
-                const array = Object.keys(quests).map(id => ({id, ...quests[id]}));
-                
-                if(array.length === 0) { list.innerHTML = `<div class='text-center py-10 font-bold opacity-30'>미션이 없어요.</div>`; return; }
+                const array = Object.keys(quests).reverse();
 
-                list.innerHTML = array.map(q => {
+                if (array.length === 0) {
+                    list.innerHTML = `<div class="text-center py-10 opacity-30">부여된 퀘스트가 없습니다.</div>`;
+                    return;
+                }
+
+                list.innerHTML = array.map(id => {
+                    const q = quests[id];
                     const isDone = q.verified_students && q.verified_students[myName];
                     return `
                     <div class="bg-white p-4 rounded-2xl border flex justify-between items-center shadow-sm">
                         <div>
-                            <p class="font-black text-slate-800">${q.item_name}</p>
-                            <p class="text-[10px] font-bold text-slate-400">마감: ${q.deadline}</p>
+                            <p class="font-black">${q.item_name}</p>
+                            <p class="text-[10px] text-slate-400">마감: ${q.deadline}</p>
                         </div>
-                        ${isDone ? `<span class="text-emerald-500 font-black flex items-center gap-1">인증됨 <i data-lucide="check-circle" class="w-4"></i></span>` 
-                        : `<button onclick="openCamera('${q.id}')" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black">실시간 촬영</button>`}
+                        ${isDone ? `<span class="text-emerald-500 font-black text-xs">인증 완료</span>` 
+                        : `<button onclick="openCam('${id}')" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black">촬영</button>`}
                     </div>`;
                 }).join('');
                 lucide.createIcons();
             });
         }
 
-        function openCamera(id) {
-            currentQuestId = id;
-            document.getElementById('camera-input').click();
+        function openCam(id) { currentQuestId = id; document.getElementById('camera-input').click(); }
+
+        function verifyPhoto(e) {
+            if (!e.target.files[0]) return;
+            // 인증 데이터베이스 반영
+            db.ref(`quests/${currentQuestId}/verified_students/${myName}`).set(new Date().toLocaleString());
+            alert("인증되었습니다!");
         }
 
-        function processVerification(e) {
-            const file = e.target.files[0];
-            if(!file) return;
-            
-            document.getElementById('loading-overlay').classList.remove('hidden');
-            // 실제 앱에서는 여기서 AI 모델을 돌리거나 저장하지만, 지금은 연동 로직만:
-            setTimeout(() => {
-                db.ref(`quests/${currentQuestId}/verified_students/${myName}`).set(new Date().toLocaleString());
-                document.getElementById('loading-overlay').classList.add('hidden');
-                alert("인증 완료! 참 잘했어요!");
-            }, 1500);
-        }
-
-        // 알림 로직 (실제 브라우저 푸시는 제약이 많아 알림 예약 시뮬레이션 권장)
+        function logout() { sessionStorage.clear(); location.reload(); }
     </script>
 </body>
 </html>
