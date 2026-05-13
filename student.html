@@ -9,10 +9,10 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
-<body class="bg-slate-50 text-gray-900">
+<body class="bg-slate-50 text-gray-900 font-sans">
     <div id="login-modal" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6">
         <div class="w-full max-w-sm space-y-4">
-            <div class="w-20 h-20 bg-emerald-500 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black shadow-xl shadow-emerald-100">챙</div>
+            <div class="w-20 h-20 bg-emerald-500 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black shadow-xl">챙</div>
             <h1 class="text-2xl font-black text-center mb-2">우리 반 챙김이</h1>
             <input type="password" id="access-code" placeholder="인증 코드 (1234)" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all font-bold text-center">
             <input type="text" id="user-name" placeholder="이름 입력 (예: 김큐티)" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all font-bold text-center">
@@ -37,12 +37,8 @@
 
             <section class="bg-slate-900 p-6 rounded-[32px] text-white shadow-xl">
                 <div class="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 class="font-black text-sm opacity-60">이번 주 기록 현황</h2>
-                    </div>
-                    <div class="text-right">
-                        <span id="weekly-rate" class="text-emerald-400 font-black text-2xl">0%</span>
-                    </div>
+                    <h2 class="font-black text-sm opacity-60">주간 달성률</h2>
+                    <span id="weekly-rate" class="text-emerald-400 font-black text-2xl">0%</span>
                 </div>
                 <div class="grid grid-cols-7 gap-2" id="weekly-grid"></div>
             </section>
@@ -75,60 +71,49 @@
             document.getElementById('login-modal').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
             document.getElementById('display-name').innerText = myName + " 학생";
-            
-            // 실시간 존재 확인 등록
-            const pRef = db.ref(`presence/${myName}`);
-            pRef.set({ status: "online", last_seen: Date.now() });
-            pRef.onDisconnect().remove();
-
             syncData();
         }
 
         function syncData() {
             db.ref('quests').on('value', snap => {
                 const quests = snap.val() || {};
-                const keys = Object.keys(quests).reverse();
-                const myQuests = keys.filter(id => quests[id].target === 'all' || (quests[id].target_list && quests[id].target_list.includes(myName)));
+                const myQuests = Object.keys(quests).reverse().filter(id => quests[id].target === 'all' || (quests[id].target_list && quests[id].target_list.includes(myName)));
 
                 document.getElementById('quest-list').innerHTML = myQuests.map(id => {
                     const q = quests[id];
                     const isDone = q.verified_students && q.verified_students[myName];
                     return `
                     <div class="bg-white p-5 rounded-2xl border flex justify-between items-center shadow-sm">
-                        <div><p class="font-black ${isDone ? 'text-slate-300 line-through' : 'text-slate-800'}">${q.item_name}</p></div>
-                        ${isDone ? '<span class="text-emerald-500 font-black text-xs">완료 ✅</span>' : 
+                        <p class="font-black ${isDone ? 'text-slate-300 line-through' : 'text-slate-800'}">${q.item_name}</p>
+                        ${isDone ? '<span class="text-emerald-500 font-black text-xs text-right">인증완료</span>' : 
                         `<button onclick="activeId='${id}'; document.getElementById('camera-input').click()" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black">인증</button>`}
                     </div>`;
-                }).join('') || '<p class="text-center py-10 text-slate-400 font-bold">참여할 퀘스트가 없습니다.</p>';
-
-                updateWeeklyReport(myQuests, quests);
+                }).join('') || '<p class="text-center py-10 text-slate-400 font-bold text-sm">진행 중인 퀘스트가 없습니다.</p>';
+                
+                updateWeekly(myQuests, quests);
                 lucide.createIcons();
             });
         }
 
-        function updateWeeklyReport(myQuests, allData) {
+        function updateWeekly(myQuests, all) {
             const grid = document.getElementById('weekly-grid');
             grid.innerHTML = '';
-            let doneCount = 0;
-            const today = new Date();
-
+            let count = 0;
             for(let i=6; i>=0; i--) {
-                const targetDate = new Date();
-                targetDate.setDate(today.getDate() - i);
-                const dateKey = targetDate.toISOString().split('T')[0];
-                const isDayDone = myQuests.some(id => allData[id].verified_students && allData[id].verified_students[myName] && allData[id].verified_students[myName].includes(dateKey));
-                if(isDayDone) doneCount++;
-                grid.innerHTML += `<div class="w-full aspect-square rounded-xl bg-slate-800 border-2 ${isDayDone ? 'bg-emerald-500 border-emerald-400' : 'border-slate-700'}"></div>`;
+                const day = new Date(); day.setDate(day.getDate()-i);
+                const isDone = myQuests.some(id => all[id].verified_students && all[id].verified_students[myName]);
+                if(isDone) count++;
+                grid.innerHTML += `<div class="aspect-square rounded-xl bg-slate-800 border-2 ${isDone ? 'bg-emerald-500 border-emerald-400' : 'border-slate-700'}"></div>`;
             }
-            document.getElementById('weekly-rate').innerText = myQuests.length > 0 ? Math.round((doneCount / myQuests.length) * 100) + "%" : "0%";
+            document.getElementById('weekly-rate').innerText = myQuests.len
+            gth > 0 ? Math.round((count/myQuests.length)*100)+"%" : "0%";
         }
 
         function handleAuth(e) {
             if(!e.target.files[0]) return;
-            const dateStr = new Date().toISOString().split('T')[0];
-            const fullStr = new Date().toLocaleString('ko-KR');
-            db.ref(`quests/${activeId}/verified_students/${myName}`).set(fullStr);
-            alert("인증되었습니다!");
+            const time = new Date().toLocaleString();
+            db.ref(`quests/${activeId}/verified_students/${myName}`).set(time);
+            alert("미션 인증 성공!");
         }
     </script>
 </body>
