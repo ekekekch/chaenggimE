@@ -10,98 +10,120 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body class="bg-slate-50 text-gray-900">
-    <!-- 로그인 섹션 (세션 정보 없으면 표시) -->
-    <div id="login-modal" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 hidden">
-        <div class="w-full max-w-sm space-y-4">
-            <h1 class="text-2xl font-black text-center mb-6">우리 반 챙김이</h1>
-            <input type="text" id="access-code" placeholder="인증 코드(1234)" class="w-full p-4 border rounded-2xl outline-none focus:ring-2 ring-emerald-500">
-            <input type="text" id="user-name" placeholder="본인 이름" class="w-full p-4 border rounded-2xl outline-none focus:ring-2 ring-emerald-500">
-            <button onclick="login()" class="w-full bg-emerald-500 text-white p-4 rounded-2xl font-black text-lg">입장하기</button>
+    <div id="login-modal" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-sm space-y-4 text-center">
+            <div class="w-20 h-20 bg-emerald-500 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black shadow-xl shadow-emerald-100">챙</div>
+            <h1 class="text-2xl font-black mb-2">우리 반 챙김이 로그인</h1>
+            <p class="text-slate-400 text-sm mb-6 font-bold">인증 코드와 이름을 입력하세요.</p>
+            <input type="password" id="access-code" placeholder="인증 코드 입력" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all">
+            <input type="text" id="user-name" placeholder="이름 입력" class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all">
+            <button onclick="login()" class="w-full bg-emerald-500 text-white p-4 rounded-2xl font-black text-lg shadow-lg shadow-emerald-100 active:scale-95 transition-all">입장하기</button>
         </div>
     </div>
 
-    <!-- 메인 앱 섹션 -->
     <div id="app" class="max-w-lg mx-auto pb-20 hidden">
-        <nav class="sticky top-0 bg-white border-b px-6 py-5 flex justify-between items-center z-50">
-            <h1 class="font-black text-lg"><span id="display-name" class="text-emerald-600"></span> 학생</h1>
-            <button onclick="logout()" class="text-[10px] text-slate-400 font-bold">로그아웃</button>
+        <nav class="sticky top-0 bg-white/80 backdrop-blur-md border-b px-6 py-5 flex justify-between items-center z-50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white"><i data-lucide="sparkles" class="w-4"></i></div>
+                <h1 class="font-black text-lg"><span id="display-name" class="text-emerald-600"></span> 학생</h1>
+            </div>
+            <div class="text-[10px] font-black bg-orange-100 text-orange-600 px-3 py-1.5 rounded-full" id="streak-display">0일 연속 🔥</div>
         </nav>
 
         <div class="px-5 py-6 space-y-8">
-            <section>
-                <h2 class="font-black text-lg mb-4 flex items-center gap-2 px-1"><i data-lucide="target" class="text-emerald-500 w-5"></i> 오늘의 미션</h2>
-                <div id="quest-list" class="space-y-3">
-                    <div class="text-center py-10 text-slate-400 font-bold">미션을 불러오는 중...</div>
+            <section class="bg-white p-6 rounded-[32px] border shadow-sm">
+                <div class="flex justify-between items-end mb-3">
+                    <h3 class="font-black text-sm">오늘의 성장</h3>
+                    <span id="xp-text" class="text-emerald-500 font-black text-xl">0 <span class="text-xs text-slate-300">/ 100 XP</span></span>
                 </div>
+                <div class="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
+                    <div id="xp-bar" class="h-full bg-emerald-500 transition-all duration-1000" style="width: 0%"></div>
+                </div>
+            </section>
+
+            <section class="space-y-4">
+                <h2 class="font-black text-lg flex items-center gap-2"><i data-lucide="target" class="text-emerald-500"></i> 오늘의 퀘스트</h2>
+                <div id="quest-list" class="space-y-3"></div>
+            </section>
+
+            <section class="bg-slate-900 p-6 rounded-[32px] text-white">
+                <h2 class="font-black text-sm mb-4 opacity-60">이번 주 기록 현황</h2>
+                <div class="flex justify-between gap-1" id="weekly-dots">
+                    </div>
             </section>
         </div>
     </div>
 
-    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="verifyPhoto(event)">
+    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleUpload(event)">
 
     <script>
-        // Firebase 설정 (교사용과 반드시 동일해야 함)
         const firebaseConfig = { databaseURL: "https://chaenggime-default-rtdb.firebaseio.com/" };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        let myName = sessionStorage.getItem("studentName");
-        let currentQuestId = "";
+        let myName = localStorage.getItem("studentName");
+        let currentQuestId = null;
 
-        // 페이지 로드 시 로그인 상태 확인
-        window.onload = () => {
-            if (myName) {
-                showApp();
-            } else {
-                document.getElementById('login-modal').classList.remove('hidden');
-            }
-        };
+        window.onload = () => { if(myName) autoLogin(); };
 
         function login() {
             const code = document.getElementById('access-code').value;
-            const nameInput = document.getElementById('user-name').value.trim();
+            const name = document.getElementById('user-name').value.trim();
+            if(code !== "1234") return alert("인증코드가 틀렸습니다.");
+            if(!name) return alert("이름을 입력하세요.");
             
-            if (code !== "1234") return alert("코드가 틀렸습니다.");
-            if (!nameInput) return alert("이름을 입력하세요.");
-
-            sessionStorage.setItem("studentName", nameInput); // 새로고침해도 유지되게 저장
-            myName = nameInput;
-            
-            // 실시간 입장 현황 기록
-            db.ref('presence/' + myName).set({ status: "online", last_seen: Date.now() });
-            
-            showApp();
+            localStorage.setItem("studentName", name);
+            myName = name;
+            autoLogin();
         }
 
-        function showApp() {
+        function autoLogin() {
             document.getElementById('login-modal').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
             document.getElementById('display-name').innerText = myName;
-            loadQuests();
+            
+            // 실시간 상태 업데이트
+            db.ref(`presence/${myName}`).set({ last_seen: Date.now(), status: 'online' });
+            db.ref(`presence/${myName}`).onDisconnect().remove();
+
+            syncUserData();
+            syncQuests();
         }
 
-        function loadQuests() {
-            db.ref('quests').on('value', (snap) => {
+        function syncUserData() {
+            db.ref(`users/${myName}`).on('value', snap => {
+                const data = snap.val() || { xp: 0, streak: 0, weekly: {} };
+                document.getElementById('xp-text').innerHTML = `${data.xp} <span class="text-xs text-slate-300">/ 100 XP</span>`;
+                document.getElementById('xp-bar').style.width = `${data.xp}%`;
+                document.getElementById('streak-display').innerText = `${data.streak}일 연속 🔥`;
+                
+                // 주간 기록 렌더링
+                const days = ['월','화','수','목','금','토','일'];
+                document.getElementById('weekly-dots').innerHTML = days.map(d => `
+                    <div class="text-center flex-1">
+                        <div class="w-full aspect-square rounded-full border-2 ${data.weekly[d] ? 'bg-emerald-500 border-emerald-500' : 'border-slate-700'} mb-1"></div>
+                        <span class="text-[10px] font-bold opacity-40">${d}</span>
+                    </div>`).join('');
+            });
+        }
+
+        function syncQuests() {
+            db.ref('quests').on('value', snap => {
                 const quests = snap.val() || {};
                 const list = document.getElementById('quest-list');
-                const array = Object.keys(quests).reverse();
+                const keys = Object.keys(quests).reverse();
 
-                if (array.length === 0) {
-                    list.innerHTML = `<div class="text-center py-10 opacity-30">부여된 퀘스트가 없습니다.</div>`;
-                    return;
-                }
-
-                list.innerHTML = array.map(id => {
+                list.innerHTML = keys.map(id => {
                     const q = quests[id];
                     const isDone = q.verified_students && q.verified_students[myName];
                     return `
-                    <div class="bg-white p-4 rounded-2xl border flex justify-between items-center shadow-sm">
+                    <div class="bg-white p-5 rounded-2xl border flex justify-between items-center shadow-sm">
                         <div>
-                            <p class="font-black">${q.item_name}</p>
-                            <p class="text-[10px] text-slate-400">마감: ${q.deadline}</p>
+                            <p class="font-black text-slate-800">${q.item_name}</p>
+                            <p class="text-[10px] font-bold text-slate-400">마감: ${q.deadline}</p>
                         </div>
-                        ${isDone ? `<span class="text-emerald-500 font-black text-xs">인증 완료</span>` 
-                        : `<button onclick="openCam('${id}')" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black">촬영</button>`}
+                        ${isDone ? `<span class="text-emerald-500 font-black text-xs">인증 완료 ✅</span>` 
+                        : `<button onclick="openCam('${id}')" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black">사진 촬영</button>`}
                     </div>`;
                 }).join('');
                 lucide.createIcons();
@@ -110,14 +132,14 @@
 
         function openCam(id) { currentQuestId = id; document.getElementById('camera-input').click(); }
 
-        function verifyPhoto(e) {
-            if (!e.target.files[0]) return;
-            // 인증 데이터베이스 반영
+        function handleUpload(e) {
+            if(!e.target.files[0]) return;
+            // 퀘스트 완료 처리
             db.ref(`quests/${currentQuestId}/verified_students/${myName}`).set(new Date().toLocaleString());
-            alert("인증되었습니다!");
+            // XP 보상 처리
+            db.ref(`users/${myName}/xp`).transaction(current => (current || 0) + 20);
+            alert("참 잘했어요! 20XP를 획득했습니다.");
         }
-
-        function logout() { sessionStorage.clear(); location.reload(); }
     </script>
 </body>
 </html>
