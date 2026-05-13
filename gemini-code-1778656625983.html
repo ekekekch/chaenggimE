@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>챙김이 - 학생용</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .quest-card { transition: all 0.3s ease; }
+    .xp-bar { transition: width 0.8s ease-out; }
+    #loading-overlay { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); }
+  </style>
+</head>
+<body class="h-full bg-slate-50 text-gray-900">
+  <div id="app" class="h-full w-full overflow-auto pb-20">
+    <nav class="sticky top-0 z-50 bg-white border-b border-emerald-100 px-6 py-5 shadow-sm">
+      <div class="max-w-lg mx-auto flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg">
+          <i data-lucide="sparkles" class="w-6 h-6 text-white"></i>
+        </div>
+        <h1 class="text-xl font-extrabold text-slate-800">나의 챙김이</h1>
+      </div>
+    </nav>
+
+    <div class="max-w-lg mx-auto px-5 py-6">
+      <!-- XP 섹션 -->
+      <div class="mb-6 bg-white rounded-3xl p-6 border border-emerald-100 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm text-slate-500 font-bold">학생 1님의 오늘 성장</span>
+          <span id="xp-display" class="text-lg font-black text-emerald-600">0 / 100 XP</span>
+        </div>
+        <div class="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
+          <div id="xp-bar" class="xp-bar h-full bg-gradient-to-r from-emerald-400 to-teal-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- 미션 리스트 -->
+      <h2 class="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+        <i data-lucide="flame" class="w-5 h-5 text-orange-500"></i> 오늘의 미션
+      </h2>
+      <div id="quest-list" class="space-y-4"></div>
+    </div>
+
+    <!-- 핵심: 카메라 강제 호출 속성(capture="environment") 적용 -->
+    <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event)">
+    
+    <div id="loading-overlay" class="hidden fixed inset-0 z-[60] flex flex-col items-center justify-center">
+      <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p class="text-emerald-800 font-black">AI가 오늘 찍은 사진인지 확인 중...</p>
+    </div>
+
+    <div id="toast" class="hidden fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-8 py-4 rounded-2xl text-sm font-bold shadow-2xl transition-all"></div>
+  </div>
+
+  <script>
+    let allData = JSON.parse(localStorage.getItem('shared_quest_data')) || [];
+    let currentQuestId = null;
+    let aiModel = null;
+
+    async function loadModel() { aiModel = await cocoSsd.load(); }
+    loadModel();
+
+    function saveData() {
+      localStorage.setItem('shared_quest_data', JSON.stringify(allData));
+      renderAll();
+    }
+
+    function renderQuests() {
+      const container = document.getElementById('quest-list');
+      const myQuests = allData.filter(q => q.student_name === '학생1');
+      if (myQuests.length === 0) {
+        container.innerHTML = `<div class="py-10 text-center text-slate-400 font-bold">미션이 없습니다.</div>`;
+        updateXP(0); lucide.createIcons(); return;
+      }
+      let totalXP = 0;
+      container.innerHTML = myQuests.map(q => {
+        if(q.verified) totalXP += 20;
+        return `
+          <div class="quest-card bg-white rounded-2xl p-5 border border-slate-100 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl ${q.verified ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-50 text-slate-300'} flex items-center justify-center">
+                <i data-lucide="${q.verified ? 'check-circle' : 'camera'}"></i>
+              </div>
+              <h3 class="font-bold text-slate-800 ${q.verified ? 'line-through opacity-40' : ''}">${q.item_name}</h3>
+            </div>
+            ${!q.verified ? `<button onclick="startVerify(${q.id})" class="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-black">인증하기</button>` : `<span class="text-emerald-500 text-xs font-black">성공!</span>`}
+          </div>`;
+      }).join('');
+      updateXP(totalXP); lucide.createIcons();
+    }
+
+    function startVerify(id) {
+      currentQuestId = id;
+      document.getElementById('photo-input').click();
+    }
+
+    // 사진 업로드 및 검증 함수 (수정됨)
+    async function handlePhotoUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // [부정방지 1] 오늘 날짜 확인 로직
+      const now = new Date();
+      const fileDate = new Date(file.lastModified);
+      const isToday = now.getFullYear() === fileDate.getFullYear() && 
+                      now.getMonth() === fileDate.getMonth() && 
+                      now.getDate() === fileDate.getDate();
+
+      if (!isToday) {
+        alert("❌ 오늘 찍은 사진만 인정됩니다! 카메라로 직접 찍어주세요.");
+        event.target.value = '';
+        return;
+      }
+
+      document.getElementById('loading-overlay').classList.remove('hidden');
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const img = new Image();
+        img.onload = async () => {
+          if (!aiModel) await loadModel();
+          const preds = await aiModel.detect(img);
+          const quest = allData.find(q => q.id === currentQuestId);
+          
+          if (preds.length > 0) {
+            quest.verified = true;
+            quest.timestamp = new Date().getTime();
+            showToast(`✅ ${preds[0].class} 확인! 오늘 미션 성공!`);
+          } else {
+            showToast("⚠️ 사진에서 물건을 찾지 못했어요.");
+          }
+          document.getElementById('loading-overlay').classList.add('hidden');
+          saveData();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function updateXP(xp) {
+      document.getElementById('xp-display').textContent = `${xp} / 100 XP`;
+      document.getElementById('xp-bar').style.width = `${Math.min(xp, 100)}%`;
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 3000);
+    }
+
+    function renderAll() { renderQuests(); }
+    window.onload = renderAll;
+    setInterval(() => {
+      allData = JSON.parse(localStorage.getItem('shared_quest_data')) || [];
+      renderAll();
+    }, 2000);
+  </script>
+</body>
+</html>

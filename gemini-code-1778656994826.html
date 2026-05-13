@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>챙김이 관리자 - 교사용</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #f8fafc; }
+    .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+    .student-checkbox:checked + label { 
+      background: #10b981; 
+      color: white; 
+      border-color: #10b981;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    .action-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+    .action-btn:active { transform: scale(0.95); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+  </style>
+</head>
+<body class="h-full text-slate-900">
+  <div class="max-w-2xl mx-auto px-6 py-10">
+    
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-10">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center shadow-xl shadow-slate-200">
+          <i data-lucide="shield-check" class="w-6 h-6 text-emerald-400"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl font-black text-slate-800 tracking-tight">Quest Control</h1>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">준비물 관리 시스템</p>
+        </div>
+      </div>
+      <button onclick="clearAll()" class="text-xs font-bold text-red-400 hover:text-red-500 flex items-center gap-1 transition-colors">
+        <i data-lucide="refresh-ccw" class="w-3 h-3"></i> 전체 초기화
+      </button>
+    </header>
+
+    <!-- Main Dashboard -->
+    <div class="space-y-8">
+      
+      <!-- 1. 퀘스트 생성 폼 -->
+      <section class="bg-white rounded-[2rem] p-8 shadow-2xl shadow-slate-200/50 border border-slate-100">
+        <div class="flex items-center gap-2 mb-6">
+          <span class="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
+          <h2 class="text-lg font-bold text-slate-700">새로운 미션 만들기</h2>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <label class="text-[11px] font-black text-slate-400 uppercase ml-1 mb-2 block">무엇을 챙겨야 하나요?</label>
+            <input id="quest-item" type="text" placeholder="예: 가위, 수학익힘책, 리코더" 
+              class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-base font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:outline-none transition-all">
+          </div>
+
+          <div>
+            <label class="text-[11px] font-black text-slate-400 uppercase ml-1 mb-3 block">대상을 선택해주세요 (중복 선택 가능)</label>
+            <div id="student-selector" class="grid grid-cols-4 sm:grid-cols-6 gap-2">
+              <!-- JS로 생성 -->
+            </div>
+          </div>
+
+          <button onclick="assignQuest()" class="action-btn w-full py-5 bg-slate-900 text-emerald-400 rounded-2xl text-lg font-black shadow-xl shadow-slate-900/20 hover:bg-slate-800 flex items-center justify-center gap-2 mt-4">
+            <i data-lucide="send" class="w-5 h-5"></i>
+            미션 발송하기
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. 실시간 현황 로그 -->
+      <section>
+        <div class="flex items-center justify-between mb-5 px-2">
+          <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
+            <i data-lucide="activity" class="w-5 h-5 text-emerald-500"></i> 발송 현황
+          </h2>
+          <span id="log-count" class="text-xs font-bold text-slate-400">Total 0</span>
+        </div>
+
+        <div id="teacher-log" class="grid gap-3">
+          <!-- JS로 로그 생성 -->
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Toast 알림 -->
+  <div id="toast" class="hidden fixed top-10 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-8 py-4 rounded-2xl text-sm font-bold shadow-2xl transition-all"></div>
+
+  <script>
+    let allData = JSON.parse(localStorage.getItem('shared_quest_data')) || [];
+
+    function init() {
+      const selector = document.getElementById('student-selector');
+      selector.innerHTML = Array.from({length: 12}, (_, i) => `
+        <div class="relative">
+          <input type="checkbox" id="st-${i+1}" value="학생${i+1}" class="student-checkbox hidden peer">
+          <label for="st-${i+1}" class="flex items-center justify-center py-3 border border-slate-200 rounded-xl text-xs font-black text-slate-500 cursor-pointer transition-all hover:bg-slate-50">
+            ${i+1}번
+          </label>
+        </div>
+      `).join('');
+      renderLog();
+      lucide.createIcons();
+    }
+
+    function saveData() {
+      localStorage.setItem('shared_quest_data', JSON.stringify(allData));
+      renderLog();
+    }
+
+    function assignQuest() {
+      const item = document.getElementById('quest-item').value.trim();
+      const selected = Array.from(document.querySelectorAll('.student-checkbox:checked')).map(cb => cb.value);
+      
+      if (!item) return showToast('준비물 이름을 입력해주세요!', 'bg-orange-500');
+      if (selected.length === 0) return showToast('대상 학생을 선택해주세요!', 'bg-orange-500');
+
+      selected.forEach(name => {
+        allData.push({
+          id: Date.now() + Math.random(),
+          student_name: name,
+          item_name: item,
+          verified: false,
+          timestamp: new Date().getTime()
+        });
+      });
+
+      saveData();
+      document.getElementById('quest-item').value = '';
+      document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = false);
+      showToast('성공적으로 미션을 발송했습니다!', 'bg-emerald-500');
+    }
+
+    function renderLog() {
+      const log = document.getElementById('teacher-log');
+      const countLabel = document.getElementById('log-count');
+      countLabel.textContent = `Total ${allData.length}`;
+
+      if (allData.length === 0) {
+        log.innerHTML = `
+          <div class="bg-white rounded-[2rem] py-16 text-center border border-dashed border-slate-200">
+            <i data-lucide="inbox" class="w-10 h-10 text-slate-200 mx-auto mb-3"></i>
+            <p class="text-slate-400 font-bold text-sm italic">현재 관리 중인 미션이 없습니다.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      log.innerHTML = allData.slice().reverse().map(q => `
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-emerald-200 transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full ${q.verified ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'} flex items-center justify-center transition-all">
+              <i data-lucide="${q.verified ? 'check' : 'clock'}" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-black text-slate-800 text-sm">${q.student_name}</span>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-400 uppercase">${new Date(q.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              </div>
+              <p class="text-sm font-bold text-slate-500">${q.item_name}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-[11px] font-black ${q.verified ? 'text-emerald-500' : 'text-orange-400'}">
+              ${q.verified ? '인증완료' : '대기중'}
+            </span>
+            <button onclick="deleteQuest(${q.id})" class="text-slate-300 hover:text-red-500 transition-colors">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function deleteQuest(id) {
+      allData = allData.filter(q => q.id !== id);
+      saveData();
+    }
+
+    function clearAll() {
+      if(confirm('모든 데이터를 삭제하시겠습니까? 학생들의 기록도 초기화됩니다.')) {
+        allData = [];
+        saveData();
+      }
+    }
+
+    function showToast(msg, colorClass) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = `fixed top-10 left-1/2 -translate-x-1/2 z-50 ${colorClass} text-white px-8 py-4 rounded-2xl text-sm font-bold shadow-2xl transition-all`;
+      t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 3000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
