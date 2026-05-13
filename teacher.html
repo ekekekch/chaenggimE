@@ -3,191 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>챙김이 - 교사용(온라인)</title>
+    <title>챙김이 - 교사용</title>
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        /* 모바일 세로 스크롤 최적화 */
-        body { -webkit-tap-highlight-color: transparent; }
-        .dashboard-card { transition: transform 0.2s; }
-        .dashboard-card:active { transform: scale(0.98); }
-    </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
-    <div class="max-w-xl mx-auto p-5 pb-20 space-y-8">
-        
-        <!-- 상단 헤더 -->
-        <header class="py-4">
-            <h1 class="text-2xl font-black flex items-center gap-2">
-                <span class="bg-blue-600 text-white w-8 h-8 flex items-center justify-center rounded-lg text-sm">T</span>
-                우리 반 퀘스트 관리
-            </h1>
-        </header>
+<body class="bg-slate-50 p-5">
+    <div class="max-w-xl mx-auto space-y-8">
+        <header><h1 class="text-2xl font-black text-blue-600">교사용 컨트롤러</h1></header>
 
-        <!-- 1. 미션 전송 패널 -->
-        <section class="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200 space-y-5">
-            <h2 class="text-lg font-black flex items-center gap-2 text-blue-600">🚀 신규 퀘스트 발송</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-[11px] font-black text-slate-400 mb-1 px-1">준비물 또는 미션 내용</label>
-                    <input type="text" id="item-name" placeholder="예: 수학 익힘책 12쪽" class="w-full bg-slate-50 border-0 p-4 rounded-2xl outline-none focus:ring-2 ring-blue-500 font-bold">
-                </div>
-                <div>
-                    <label class="block text-[11px] font-black text-slate-400 mb-1 px-1">인증 마감 일시</label>
-                    <input type="datetime-local" id="deadline" class="w-full bg-slate-50 border-0 p-4 rounded-2xl outline-none focus:ring-2 ring-blue-500 font-bold text-sm">
-                </div>
-                <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-black text-lg shadow-lg shadow-blue-100 active:bg-blue-700 transition-all">퀘스트 발송하기</button>
+        <!-- 퀘스트 발송 -->
+        <section class="bg-white p-6 rounded-[32px] border shadow-sm space-y-4">
+            <h2 class="font-black">🚀 신규 퀘스트 발송</h2>
+            <input type="text" id="item-name" placeholder="준비물 이름" class="w-full p-4 bg-slate-50 rounded-2xl outline-none">
+            <input type="datetime-local" id="deadline" class="w-full p-4 bg-slate-50 rounded-2xl outline-none">
+            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-black">퀘스트 발송</button>
+        </section>
+
+        <!-- 입장 학생 현황 섹션 (새로 추가) -->
+        <section class="bg-white p-6 rounded-[32px] border shadow-sm">
+            <h2 class="font-black mb-4 flex items-center justify-between">
+                👥 입장한 학생 현황
+                <span id="student-count" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">0명</span>
+            </h2>
+            <div id="presence-list" class="flex flex-wrap gap-2 text-xs font-bold text-slate-500 italic">
+                입장한 학생이 없습니다.
             </div>
         </section>
 
-        <!-- 2. 지참 현황 요약 (휠) -->
-        <section class="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200">
-            <h3 class="font-black mb-4 text-center">전체 지참 현황 요약</h3>
-            <div class="relative w-40 h-40 mx-auto">
-                <canvas id="statusChart"></canvas>
-            </div>
-        </section>
-
-        <!-- 3. 집중 케어 명단 (2회 이상 누락) -->
-        <section class="bg-red-50 p-6 rounded-[32px] border-2 border-red-100">
-            <h3 class="text-red-600 font-black flex items-center gap-2 mb-3 tracking-tight text-sm">
-                🚨 집중 케어 명단 (2회 이상 누락)
-            </h3>
-            <div id="care-list" class="flex flex-wrap gap-2 text-xs font-bold text-red-500">
-                분석 중...
-            </div>
-        </section>
-
-        <!-- 4. 부여한 퀘스트 현황 (리스트) -->
+        <!-- 퀘스트 현황 리스트 -->
         <section class="space-y-4">
-            <h3 class="font-black text-xl px-1">부여한 퀘스트 현황</h3>
+            <h2 class="font-black text-xl">부여한 퀘스트 현황</h2>
             <div id="item-dashboard" class="space-y-4">
-                <!-- 실시간 퀘스트 카드 리스트 -->
+                <!-- 여기에 데이터가 실시간으로 뜹니다 -->
             </div>
         </section>
-
-        <div class="text-center">
-            <button onclick="clearAll()" class="text-slate-400 text-xs font-bold underline opacity-50">모든 데이터 초기화</button>
-        </div>
     </div>
 
     <script>
         const firebaseConfig = { databaseURL: "https://chaenggime-default-rtdb.firebaseio.com/" };
-        firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // [사용자 맞춤형] 실제 학생 명단으로 변경 가능
-        const students = ["김철수", "이영희", "박지민", "최유나", "정재현", "송미소"];
-
+        // 1. 퀘스트 발송 기능
         function sendQuest() {
             const item = document.getElementById('item-name').value;
-            const deadline = document.getElementById('deadline').value;
-            if(!item || !deadline) return alert("미션 내용과 마감 시간을 확인해 주세요.");
-            
+            const dl = document.getElementById('deadline').value;
+            if(!item || !dl) return alert("내용을 입력하세요.");
+
             db.ref('quests').push({
                 item_name: item,
-                deadline: deadline.replace('T', ' '),
-                created_at: new Date().toISOString(),
+                deadline: dl.replace('T', ' '),
                 verified_students: {}
             });
             document.getElementById('item-name').value = '';
-            alert("퀘스트가 학생들에게 전달되었습니다.");
+            alert("발송 완료!");
         }
 
-        db.ref('quests').on('value', (snap) => {
+        // 2. 입장 학생 실시간 모니터링
+        db.ref('presence').on('value', (snap) => {
             const data = snap.val() || {};
-            renderDashboard(data);
-            updateCareList(data);
-            // 차트 업데이트 로직은 필요시 추가
+            const names = Object.keys(data);
+            document.getElementById('student-count').innerText = names.length + "명";
+            document.getElementById('presence-list').innerHTML = names.map(n => 
+                `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100">${n}</span>`
+            ).join('');
         });
 
-        function renderDashboard(quests) {
+        // 3. 퀘스트 현황 실시간 업데이트
+        db.ref('quests').on('value', (snap) => {
+            const quests = snap.val() || {};
             const container = document.getElementById('item-dashboard');
-            const questKeys = Object.keys(quests).reverse(); // 최신 미션이 위로
+            const ids = Object.keys(quests).reverse();
 
-            container.innerHTML = questKeys.map(id => {
+            if(ids.length === 0) {
+                container.innerHTML = `<p class="text-center py-10 opacity-30">내역이 없습니다.</p>`;
+                return;
+            }
+
+            container.innerHTML = ids.map(id => {
                 const q = quests[id];
-                const verified = q.verified_students || {};
-                const done = students.filter(s => verified[s]);
-                const undone = students.filter(s => !verified[s]);
-
+                const done = Object.keys(q.verified_students || {});
                 return `
-                <div class="dashboard-card bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                    <div class="flex justify-between items-start mb-5">
-                        <div class="max-w-[70%]">
-                            <h4 class="text-lg font-black break-keep text-slate-800">${q.item_name}</h4>
-                            <p class="text-[10px] font-bold text-slate-400 mt-1">마감: ${q.deadline}</p>
-                        </div>
-                        <div class="bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
-                            <span class="text-sm font-black text-blue-600">${done.length}</span>
-                            <span class="text-[10px] font-bold text-blue-300"> / ${students.length}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <p class="text-[10px] font-black text-emerald-500 mb-2 px-1">✅ 완료 학생</p>
-                            <div class="flex flex-wrap gap-2">
-                                ${done.length > 0 ? done.map(s => `<div class='bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl font-bold text-[11px] border border-emerald-100'>${s}</div>`).join('') : '<span class="text-[11px] text-slate-300 px-1">아직 완료한 학생이 없습니다.</span>'}
-                            </div>
-                        </div>
-                        <div>
-                            <p class="text-[10px] font-black text-red-400 mb-2 px-1 text-right">⏳ 미완료 학생 (수정하려면 아이콘 터치)</p>
-                            <div class="flex flex-wrap gap-2 justify-end">
-                                ${undone.map(s => `
-                                    <div class='bg-slate-50 text-slate-400 px-3 py-1.5 rounded-xl font-bold text-[11px] flex items-center gap-1.5 border border-slate-100'>
-                                        ${s} 
-                                        <button onclick="manualDone('${id}', '${s}')" class="text-blue-500 hover:scale-125 transition-transform">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                                        </button>
-                                    </div>`).join('')}
-                            </div>
+                <div class="bg-white p-6 rounded-[32px] border shadow-sm">
+                    <h4 class="font-black text-lg">${q.item_name}</h4>
+                    <p class="text-xs text-slate-400 mb-4">마감: ${q.deadline}</p>
+                    <div class="space-y-2">
+                        <p class="text-[10px] font-black text-emerald-500">인증 완료 (${done.length}명)</p>
+                        <div class="flex flex-wrap gap-2">
+                            ${done.map(s => `<span class='bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-[10px] font-bold'>${s}</span>`).join('') || '<span class="text-slate-300">없음</span>'}
                         </div>
                     </div>
                 </div>`;
             }).join('');
-        }
-
-        function updateCareList(quests) {
-            const failCount = {};
-            Object.values(quests).forEach(q => {
-                const verified = q.verified_students || {};
-                students.forEach(s => {
-                    if(!verified[s]) failCount[s] = (failCount[s] || 0) + 1;
-                });
-            });
-            const targets = Object.keys(failCount).filter(s => failCount[s] >= 2);
-            document.getElementById('care-list').innerHTML = targets.length > 0 
-                ? targets.map(t => `<span class="bg-white px-3 py-1.5 rounded-xl border border-red-200 shadow-sm animate-pulse">${t} (${failCount[t]}회 누락)</span>`).join('')
-                : "🎉 현재 집중 케어 대상이 없습니다.";
-        }
-
-        function manualDone(qId, sName) {
-            if(confirm(`[${sName}] 학생을 확인 완료 처리할까요?`)) {
-                db.ref(`quests/${qId}/verified_students/${sName}`).set("Manual: " + new Date().toLocaleString());
-            }
-        }
-
-        function clearAll() { 
-            if(confirm("모든 퀘스트 기록을 초기화하시겠습니까? 학생들의 화면에서도 사라집니다.")) {
-                db.ref('quests').remove(); 
-            }
-        }
-
-        // 차트 설정 (간단 원형 차트)
-        const ctx = document.getElementById('statusChart');
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                datasets: [{
-                    data: [80, 20],
-                    backgroundColor: ['#2563eb', '#f1f5f9'],
-                    borderWidth: 0
-                }]
-            },
-            options: { cutout: '80%', events: [] }
         });
     </script>
 </body>
