@@ -7,36 +7,43 @@
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-slate-50 p-5">
-    <div class="max-w-xl mx-auto space-y-8">
-        <header><h1 class="text-2xl font-black text-blue-600">교사용 컨트롤러</h1></header>
+    <div class="max-w-xl mx-auto space-y-6 pb-20">
+        <header class="py-4"><h1 class="text-2xl font-black text-blue-600 italic">Quest Controller</h1></header>
 
-        <!-- 퀘스트 발송 -->
-        <section class="bg-white p-6 rounded-[32px] border shadow-sm space-y-4">
-            <h2 class="font-black">🚀 신규 퀘스트 발송</h2>
-            <input type="text" id="item-name" placeholder="준비물 이름" class="w-full p-4 bg-slate-50 rounded-2xl outline-none">
-            <input type="datetime-local" id="deadline" class="w-full p-4 bg-slate-50 rounded-2xl outline-none">
-            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-black">퀘스트 발송</button>
+        <section class="bg-white p-6 rounded-[32px] border-2 border-blue-50 shadow-sm space-y-4">
+            <h2 class="font-black text-blue-600 flex items-center gap-2">🚀 신규 퀘스트 발송</h2>
+            <input type="text" id="item-name" placeholder="준비물 또는 미션 내용" class="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold">
+            <input type="datetime-local" id="deadline" class="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold">
+            <button onclick="sendQuest()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-100">발송하기</button>
         </section>
 
-        <!-- 입장 학생 현황 섹션 (새로 추가) -->
-        <section class="bg-white p-6 rounded-[32px] border shadow-sm">
-            <h2 class="font-black mb-4 flex items-center justify-between">
-                👥 입장한 학생 현황
-                <span id="student-count" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">0명</span>
-            </h2>
-            <div id="presence-list" class="flex flex-wrap gap-2 text-xs font-bold text-slate-500 italic">
-                입장한 학생이 없습니다.
-            </div>
+        <div class="grid grid-cols-2 gap-4">
+            <section class="bg-white p-5 rounded-[32px] border text-center">
+                <h3 class="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">전체 지참 현황</h3>
+                <div class="relative w-24 h-24 mx-auto">
+                    <canvas id="statusChart"></canvas>
+                    <div id="chart-percent" class="absolute inset-0 flex items-center justify-center font-black text-blue-600 text-sm">0%</div>
+                </div>
+            </section>
+            <section class="bg-white p-5 rounded-[32px] border">
+                <h3 class="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">실시간 입장 학생</h3>
+                <div id="presence-list" class="flex flex-wrap gap-1 text-[10px] font-bold">
+                    <span class="opacity-30">없음</span>
+                </div>
+            </section>
+        </div>
+
+        <section class="bg-red-50 p-6 rounded-[32px] border-2 border-red-100">
+            <h3 class="text-red-600 font-black text-xs mb-3 flex items-center gap-2">🚨 집중 케어 대상 (2회 이상 누락)</h3>
+            <div id="care-list" class="flex flex-wrap gap-2 text-[10px] font-bold text-red-500">대기 중...</div>
         </section>
 
-        <!-- 퀘스트 현황 리스트 -->
         <section class="space-y-4">
-            <h2 class="font-black text-xl">부여한 퀘스트 현황</h2>
-            <div id="item-dashboard" class="space-y-4">
-                <!-- 여기에 데이터가 실시간으로 뜹니다 -->
-            </div>
+            <h3 class="font-black text-xl px-1">부여한 퀘스트 현황</h3>
+            <div id="item-dashboard" class="space-y-4"></div>
         </section>
     </div>
 
@@ -45,7 +52,20 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 1. 퀘스트 발송 기능
+        // 관리할 학생 명단
+        const studentList = ["김철수", "이영희", "박지민", "최유나", "정재현", "송미소"];
+
+        // 차트 초기화
+        let statusChart;
+        window.onload = () => {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            statusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { datasets: [{ data: [0, 100], backgroundColor: ['#2563eb', '#f1f5f9'], borderWidth: 0 }] },
+                options: { cutout: '80%', events: [] }
+            });
+        };
+
         function sendQuest() {
             const item = document.getElementById('item-name').value;
             const dl = document.getElementById('deadline').value;
@@ -57,46 +77,76 @@
                 verified_students: {}
             });
             document.getElementById('item-name').value = '';
-            alert("발송 완료!");
+            alert("퀘스트가 발송되었습니다!");
         }
 
-        // 2. 입장 학생 실시간 모니터링
-        db.ref('presence').on('value', (snap) => {
+        // 입장 현황 모니터링
+        db.ref('presence').on('value', snap => {
             const data = snap.val() || {};
             const names = Object.keys(data);
-            document.getElementById('student-count').innerText = names.length + "명";
             document.getElementById('presence-list').innerHTML = names.map(n => 
-                `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100">${n}</span>`
+                `<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">${n}</span>`
             ).join('');
         });
 
-        // 3. 퀘스트 현황 실시간 업데이트
-        db.ref('quests').on('value', (snap) => {
+        // 퀘스트 & 집중케어 모니터링
+        db.ref('quests').on('value', snap => {
             const quests = snap.val() || {};
-            const container = document.getElementById('item-dashboard');
-            const ids = Object.keys(quests).reverse();
+            const keys = Object.keys(quests).reverse();
+            const dashboard = document.getElementById('item-dashboard');
+            
+            let totalDoneCount = 0;
+            let totalPossibleCount = keys.length * studentList.length;
+            const failScore = {};
 
-            if(ids.length === 0) {
-                container.innerHTML = `<p class="text-center py-10 opacity-30">내역이 없습니다.</p>`;
-                return;
-            }
-
-            container.innerHTML = ids.map(id => {
+            dashboard.innerHTML = keys.map(id => {
                 const q = quests[id];
-                const done = Object.keys(q.verified_students || {});
+                const doneOnes = Object.keys(q.verified_students || {});
+                totalDoneCount += doneOnes.length;
+                
+                // 누락 횟수 계산
+                studentList.forEach(s => {
+                    if(!doneOnes.includes(s)) failScore[s] = (failScore[s] || 0) + 1;
+                });
+
                 return `
-                <div class="bg-white p-6 rounded-[32px] border shadow-sm">
-                    <h4 class="font-black text-lg">${q.item_name}</h4>
-                    <p class="text-xs text-slate-400 mb-4">마감: ${q.deadline}</p>
-                    <div class="space-y-2">
-                        <p class="text-[10px] font-black text-emerald-500">인증 완료 (${done.length}명)</p>
-                        <div class="flex flex-wrap gap-2">
-                            ${done.map(s => `<span class='bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-[10px] font-bold'>${s}</span>`).join('') || '<span class="text-slate-300">없음</span>'}
-                        </div>
+                <div class="bg-white p-6 rounded-[32px] border shadow-sm space-y-4">
+                    <div class="flex justify-between items-start">
+                        <h4 class="font-black text-lg">${q.item_name}</h4>
+                        <span class="text-blue-600 font-black text-sm">${doneOnes.length} / ${studentList.length}</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${studentList.map(s => `
+                            <button onclick="toggleVerify('${id}', '${s}', ${doneOnes.includes(s)})" 
+                                class="px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all 
+                                ${doneOnes.includes(s) ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-300 border-slate-100'}">
+                                ${s}
+                            </button>
+                        `).join('')}
                     </div>
                 </div>`;
             }).join('');
+
+            // 차트 및 지표 업데이트
+            const percent = totalPossibleCount > 0 ? Math.round((totalDoneCount / totalPossibleCount) * 100) : 0;
+            document.getElementById('chart-percent').innerText = percent + "%";
+            statusChart.data.datasets[0].data = [percent, 100 - percent];
+            statusChart.update();
+
+            // 집중 케어 명단
+            const badStudents = Object.keys(failScore).filter(s => failScore[s] >= 2);
+            document.getElementById('care-list').innerHTML = badStudents.map(s => 
+                `<span class="bg-white px-3 py-1 rounded-full border border-red-200">⚠️ ${s} (${failScore[s]}회 누락)</span>`
+            ).join('') || "관리 대상 없음";
         });
+
+        function toggleVerify(qId, sName, isDone) {
+            if(isDone) {
+                if(confirm("인증을 취소할까요?")) db.ref(`quests/${qId}/verified_students/${sName}`).remove();
+            } else {
+                db.ref(`quests/${qId}/verified_students/${sName}`).set(new Date().toLocaleString());
+            }
+        }
     </script>
 </body>
 </html>
